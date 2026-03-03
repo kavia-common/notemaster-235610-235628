@@ -38,12 +38,28 @@ def _get_db_path() -> str:
     """
     Resolve SQLite DB file path.
 
-    Uses SQLITE_DB if provided; otherwise defaults to a local file (myapp.db) in the backend container.
+    Priority:
+    1) SQLITE_DB env var (explicit override; best for deployments)
+    2) Shared database container file in this mono-repo (ensures persistence end-to-end in dev)
+    3) Fallback to a local file (myapp.db) in the backend working directory
+
+    Note:
+        The database container initializes `myapp.db` under:
+        `notemaster-235610-235630/database/myapp.db`
+        (see database/db_connection.txt).
     """
     env_path = os.getenv("SQLITE_DB")
     if env_path and isinstance(env_path, str) and env_path.strip():
-        return env_path
-    # Default aligns with database container init_db.py DB_NAME
+        return env_path.strip()
+
+    # Prefer the shared DB file created by the database container so that backend and DB
+    # operate on the same persisted file during local/dev integration.
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../.."))
+    shared_db_path = os.path.join(repo_root, "notemaster-235610-235630", "database", "myapp.db")
+    if os.path.exists(shared_db_path):
+        return shared_db_path
+
+    # Last resort: create/use a local DB alongside the backend process.
     return os.path.join(os.getcwd(), "myapp.db")
 
 
